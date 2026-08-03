@@ -188,9 +188,11 @@ async function readWalletBalanceViaPage(userId, chatId) {
 
     let browser;
     try {
+        const browserPath = resolveChromeExecutable();
         browser = await puppeteer.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--single-process', '--disable-gpu']
+            executablePath: browserPath,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
         });
 
         const page = await browser.newPage();
@@ -295,6 +297,33 @@ function allKeysList() {
 }
 
 // ============================================================
+//  BROWSER PATH RESOLVER
+// ============================================================
+function resolveChromeExecutable() {
+    const candidates = [
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        process.env.CHROME_PATH,
+        process.env.GOOGLE_CHROME_BIN,
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/opt/render/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome'
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) return candidate;
+    }
+
+    try {
+        const resolved = puppeteer.executablePath();
+        if (resolved && fs.existsSync(resolved)) return resolved;
+    } catch (e) {}
+
+    return undefined;
+}
+
+// ============================================================
 //  DEVICE ID
 // ============================================================
 function getOrCreateDevice(userId) {
@@ -384,19 +413,14 @@ async function autoLogin(userId, chatId, silent = false) {
     if (!silent && chatId) await send(chatId, "⏳ Logging in & fetching Bet Token... please wait...");
     console.log("[LOGIN] Phone:", phone, "via Puppeteer (Bet Token Strategy)");
 
-    const chromeCandidates = [
-        process.env.CHROME_PATH,
-        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
-    ].filter(Boolean);
-    const chromePath = chromeCandidates.find(p => fs.existsSync(p));
+    const chromePath = resolveChromeExecutable();
     let browser;
     let betToken = null;
 
     try {
         browser = await puppeteer.launch({
             headless: process.env.BOT_HEADLESS !== 'false',
-            executablePath: chromePath || undefined,
+            executablePath: chromePath,
             args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
         });
 
