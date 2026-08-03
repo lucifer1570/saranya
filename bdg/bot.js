@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const TelegramBot = require('node-telegram-bot-api');
 const axios       = require('axios');
 const crypto      = require('crypto');
@@ -8,7 +9,7 @@ const puppeteer   = require('puppeteer');
 // ============================================================
 //  CONFIG
 // ============================================================
-const BOT_TOKEN    = "8919251343:AAHkxorWhQbfBeTQ0YdmY1Ao26tttjV3W20";
+const BOT_TOKEN    = "8231100734:AAFqNe7_oyZUFf_mo3Y2iEnAK-K6owXOT3A";
 const OWNER_ID     = 1865939951;
 const OWNER_PASS   = "praveensaran";
 const ADMIN_HANDLE = "@lucifer1570";
@@ -1346,16 +1347,44 @@ const autobetMenu={keyboard:[
 // ============================================================
 //  BOT INIT
 // ============================================================
+const BOT_LOCK_FILE = path.join(__dirname, '.bot.lock');
 let bot;
+
+function clearBotLock() {
+    try { fs.unlinkSync(BOT_LOCK_FILE); } catch (e) {}
+}
+
 function startBot(){
-    if(bot){try{bot.stopPolling();}catch(e){}}
-    bot=new TelegramBot(BOT_TOKEN,{polling:{interval:1000,autoStart:true,params:{timeout:30}}});
-    bot.on("polling_error",err=>{console.error("Poll:",err.message);});
-    bot.on("error",err=>{console.error("Bot:",err.message);});
+    if (bot) {
+        try { bot.stopPolling(); } catch (e) {}
+    }
+
+    try {
+        const existingPid = fs.readFileSync(BOT_LOCK_FILE, 'utf8').trim();
+        if (existingPid && existingPid !== String(process.pid)) {
+            console.error(`[BOT LOCK] Another bot instance is already running (PID: ${existingPid}). Exiting to prevent Telegram 409 conflict.`);
+            process.exit(1);
+        }
+    } catch (e) {}
+
+    fs.writeFileSync(BOT_LOCK_FILE, String(process.pid), 'utf8');
+
+    bot = new TelegramBot(BOT_TOKEN, { polling: { interval: 1000, autoStart: true, params: { timeout: 30 } } });
+    bot.on("polling_error", err => {
+        console.error("Poll:", err.message);
+        if (err.message && err.message.includes('409')) {
+            console.error('[BOT LOCK] Telegram polling conflict detected. This usually means another bot instance is still active.');
+        }
+    });
+    bot.on("error", err => { console.error("Bot:", err.message); });
     addHandlers();
     console.log("✅ SIVA BOT running...");
     startAutoLoginTask();
 }
+
+process.on('SIGINT', () => { try { if (bot) bot.stopPolling(); } catch (e) {}; clearBotLock(); process.exit(0); });
+process.on('SIGTERM', () => { try { if (bot) bot.stopPolling(); } catch (e) {}; clearBotLock(); process.exit(0); });
+process.on('exit', clearBotLock);
 
 async function send(chatId,text,opts={}){
     try{return await bot.sendMessage(chatId,text,opts);}
