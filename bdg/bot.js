@@ -1,3 +1,4 @@
+const fs = require('fs');
 const TelegramBot = require('node-telegram-bot-api');
 const axios       = require('axios');
 const crypto      = require('crypto');
@@ -362,101 +363,147 @@ async function fetchCaptcha() {
 let loginLock = {};
 
 async function autoLogin(userId, chatId, silent = false) {
-    if (loginLock[userId]) {
-        await logBoth(chatId, `[AUTO LOGIN] User ${userId} already in login process.`);
-        return false;
-    }
+    if (loginLock[userId]) return false;
     loginLock[userId] = true;
 
     const creds = userCreds[userId] || {};
-    const { phone, pass } = creds;
+    const phone = creds.phone;
+    const pass = creds.pass;
 
     if (!phone || !pass) {
-        await logBoth(chatId, `[AUTO LOGIN] User ${userId} has no phone or password set.`);
         loginLock[userId] = false;
+        if (!silent && chatId) await send(chatId,
+            "❌ Phone/Password இல்லை!\n\n" +
+            "Format:\n/setcreds FULLPHONE PASSWORD\n\n" +
+            "Example (India +91):\n/setcreds 916381605525 mypassword"
+        );
         return false;
     }
 
+    if (!silent && chatId) await send(chatId, "⏳ Logging in & fetching Bet Token... please wait...");
+    console.log("[LOGIN] Phone:", phone, "via Puppeteer (Bet Token Strategy)");
+
+    const chromeCandidates = [
+        process.env.CHROME_PATH,
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+    ].filter(Boolean);
+    const chromePath = chromeCandidates.find(p => fs.existsSync(p));
     let browser;
+    let betToken = null;
+
     try {
         browser = await puppeteer.launch({
-            headless: true, 
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--single-process', '--disable-gpu']
+            headless: process.env.BOT_HEADLESS !== 'false',
+            executablePath: chromePath || undefined,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
         });
+
         const page = await browser.newPage();
-        await page.setDefaultNavigationTimeout(90000); 
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        await page.setDefaultNavigationTimeout(60000);
+        await page.setUserAgent('Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36');
 
-        let capturedToken = null;
         await page.setRequestInterception(true);
-        page.on('request', (req) => {
-            if (req.url().includes('GetBalance') && req.headers()['authorization']) {
-                capturedToken = req.headers()['authorization'].replace(/^Bearer\s+/i, "");
+        page.on('request', (request) => {
+            const url = request.url();
+            const headers = request.headers();
+            if ((url.includes('WinGoBet') || url.includes('WinGo')) && headers['authorization']) {
+                const token = headers['authorization'].replace(/^Bearer\s+/i, '').trim();
+                if (token && !betToken) {
+                    betToken = token;
+                    console.log('[TOKEN CAPTURED] Bet Token found from WinGoBet request!');
+                }
             }
-            req.continue();
+            request.continue();
         });
 
-        await page.goto('https://bdgwin901.com/#/login', { waitUntil: 'domcontentloaded', timeout: 90000 });
-        await page.waitForSelector('input', { timeout: 30000 });
+        await page.goto('https://bdgwin8.vip/#/login', { waitUntil: 'networkidle2', timeout: 60000 });
+        await new Promise(r => setTimeout(r, 3000));
+
         const inputs = await page.$$('input');
-        if (inputs.length < 2) throw new Error("Login inputs not found");
-
-        await inputs[0].type(phone, { delay: 50 });
-        await inputs[1].type(pass, { delay: 50 });
-        
-        await page.evaluate(() => {
-            const btns = Array.from(document.querySelectorAll('button'));
-            const loginBtn = btns.find(b => b.innerText.includes('Log in') || b.innerText.includes('Login'));
-            if (loginBtn) loginBtn.click();
-            else document.querySelector('form')?.submit();
-        });
-
-        try {
-            await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 45000 });
-        } catch (e) {
-            // Ignore timeout, we'll check token anyway
+        if (inputs.length >= 2) {
+            await inputs[0].click({ clickCount: 3 });
+            await inputs[0].type(phone, { delay: 100 });
+            await inputs[1].click({ clickCount: 3 });
+            await inputs[1].type(pass, { delay: 100 });
+            await new Promise(r => setTimeout(r, 500));
+            await page.keyboard.press('Enter');
+        } else {
+            throw new Error('Login inputs not found on page.');
         }
+
+        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
+        await new Promise(r => setTimeout(r, 5000));
+
+        console.log('Navigating to WinGo 30s...');
+        await page.goto('https://bdgwin8.vip/#/home/AllLotteryGames/WinGo?id=1', { waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
         await new Promise(r => setTimeout(r, 5000));
 
         await page.evaluate(() => {
-            const closeBtn = document.querySelector('.van-icon-cross') || document.querySelector('.close-icon');
-            if (closeBtn) closeBtn.click();
+            const tabs = Array.from(document.querySelectorAll('div, span, p'));
+            const tab30s = tabs.find(el => el.innerText && el.innerText.includes('30s') && el.tagName !== 'INPUT');
+            if (tab30s) tab30s.click();
+        });
+        await new Promise(r => setTimeout(r, 2000));
+
+        console.log('Placing dummy bet to capture token...');
+        await page.evaluate(() => {
+            const greenBtn = Array.from(document.querySelectorAll('div, button, span')).find(el =>
+                el.innerText && el.innerText.includes('Green') && el.offsetParent !== null
+            );
+            if (greenBtn) greenBtn.click();
         });
         await new Promise(r => setTimeout(r, 1000));
 
         await page.evaluate(() => {
-            const navItems = Array.from(document.querySelectorAll('div, span'));
-            const lotteryBtn = navItems.find(el => el.innerText.trim() === 'Lottery');
-            if (lotteryBtn) lotteryBtn.click();
+            const amount1Btn = Array.from(document.querySelectorAll('div, span')).find(el =>
+                el.innerText && el.innerText.trim() === '1' && el.offsetParent !== null
+            );
+            if (amount1Btn) {
+                amount1Btn.click();
+            } else {
+                const betBtn = Array.from(document.querySelectorAll('button, div')).find(el =>
+                    el.innerText && el.innerText.includes('Bet') && el.offsetParent !== null
+                );
+                if (betBtn) betBtn.click();
+            }
         });
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 1000));
 
         await page.evaluate(() => {
-            const navItems = Array.from(document.querySelectorAll('div, span'));
-            const winGoBtn = navItems.find(el => el.innerText.trim() === 'Win Go');
-            if (winGoBtn) winGoBtn.click();
+            const confirmBetBtn = Array.from(document.querySelectorAll('button, div, span')).find(el =>
+                el.innerText && (el.innerText.includes('Confirm') || el.innerText.includes('Bet')) && el.offsetParent !== null
+            );
+            if (confirmBetBtn) confirmBetBtn.click();
         });
+        await new Promise(r => setTimeout(r, 3000));
 
-        for (let i = 0; i < 50; i++) {
-            if (capturedToken) break;
+        let waitCount = 0;
+        while (!betToken && waitCount < 15) {
             await new Promise(r => setTimeout(r, 1000));
+            waitCount++;
         }
 
-        if (capturedToken) {
-            // Success: Update token only when captured
-            userTokens[userId] = capturedToken;
-            await logBoth(chatId, `✅ [SUCCESS] Token captured successfully for user ${userId}!`);
+        if (betToken) {
+            userTokens[userId] = betToken;
+            console.log('[SUCCESS] Bet Token ready!');
+            if (!silent && chatId) await send(chatId, '✅ Login & Bet Token Success!\n📱 ' + phone + '\n🚀 AutoBet ready!');
+            loginLock[userId] = false;
             return true;
-        } else {
-            throw new Error("Token not found in requests after login sequence.");
         }
 
-    } catch (err) {
-        await logBoth(chatId, `❌ Login Error for user ${userId}: ${err.message}`, true);
+        console.log('[FAIL] Could not capture Bet Token after dummy bet.');
+        if (!silent && chatId) await send(chatId, '❌ Failed to capture Bet Token. Please check the website manually or try again.');
+        loginLock[userId] = false;
+        return false;
+
+    } catch (error) {
+        console.error('❌ Error during autoLogin:', error.message);
+        if (!silent && chatId) await send(chatId, '❌ Error during autoLogin: ' + error.message);
+        loginLock[userId] = false;
         return false;
     } finally {
         if (browser) await browser.close();
-        loginLock[userId] = false;
     }
 }
 
