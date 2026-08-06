@@ -1,4 +1,7 @@
 
+process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || require('path').join(__dirname, '.cache');
+
+
 const { createClient } = require('@supabase/supabase-js');
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -550,8 +553,9 @@ async function autoLogin(userId, chatId, silent = false) {
     let browser;
     try {
         browser = await puppeteer.launch({
-            headless: true, 
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--single-process', '--disable-gpu']
+            headless: true,
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process', '--disable-gpu']
         });
         const page = await browser.newPage();
         await page.setDefaultNavigationTimeout(90000); 
