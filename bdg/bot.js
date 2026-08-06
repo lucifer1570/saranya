@@ -71,7 +71,7 @@ async function pollAndStoreApiResults() {
 
 // Start 200ms background poller after 3 seconds
 setTimeout(() => {
-    setInterval(pollAndStoreApiResults, 200);
+    setInterval(pollAndStoreApiResults, 2000);
     console.log("⚡ High-frequency 200ms API poller started!");
 }, 3000);
 
@@ -293,19 +293,25 @@ async function fetchList() {
         const response = await axios.get(DRAW_URL, {
             headers: {
                 "Accept": "application/json, text/plain, */*",
-                "Origin": "https://bdgwin901.com",
-                "Referer": "https://bdgwin901.com/",
-                "Ar-Origin": "https://bdgwin901.com",
-                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36"
+                "Accept-Language": "en-US,en;q=0.9",
+                "Origin": "https://ar-lottery01.com",
+                "Referer": "https://ar-lottery01.com/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             },
-            timeout: 10000
+            timeout: 5000
         });
         if (response.data && response.data.data && response.data.data.list) {
             return response.data.data.list;
         }
+        if (response.data && Array.isArray(response.data)) {
+            return response.data;
+        }
         return [];
     } catch (error) {
-        console.error("[FETCH LIST ERROR]", error.message);
+        // Suppress repeated 403 console spam
+        if (!error.message.includes('403')) {
+            console.error("[FETCH LIST ERROR]", error.message);
+        }
         return null;
     }
 }
