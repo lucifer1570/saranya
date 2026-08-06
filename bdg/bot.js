@@ -749,258 +749,73 @@ function classifyNumber(number) {
     return 'Invalid';
 }
 
-class ResultAnalyzer {
-    constructor() {
-        this.results = [];
-        this.analysis = null;
-        this.prediction = null;
-    }
 
-    setResults(results) {
-        if (!Array.isArray(results) || results.length < 10) {
-            console.error('❌ Need at least 10 results');
-            return false;
-        }
-
-        this.results = results.slice(0, 10);
-        this.analyze();
-        this.predict();
-        return true;
-    }
-
-    getCategoryDetails(number) {
-        const category = this.classifyNumber(number);
-        const icon = category === 'Small' ? '⬇️' : '⬆️';
-        const range = category === 'Small' ? '0-4' : '5-9';
-        const color = category === 'Small' ? '#4ECDC4' : '#FF6B6B';
-        return { category, icon, range, color };
-    }
-
-    classifyNumber(number) {
-        return classifyNumber(number);
-    }
-
-    appearsInArray(value, array) {
-        return array.includes(value);
-    }
-
-    detectDoubleViolet(sequence) {
-        const positions = [];
-        for (let i = 0; i < sequence.length - 1; i++) {
-            if ((sequence[i] === 0 && sequence[i + 1] === 0) ||
-                (sequence[i] === 5 && sequence[i + 1] === 5)) {
-                positions.push({
-                    number: sequence[i],
-                    position: i,
-                    next: sequence[i + 1]
-                });
-            }
-        }
-        return {
-            found: positions.length > 0,
-            positions,
-            count: positions.length
-        };
-    }
-
-    analyze() {
-        if (!this.results || this.results.length === 0) {
-            console.error('❌ No results to analyze');
-            return;
-        }
-
-        const current = this.results[0];
-        const previous9 = this.results.slice(1);
-        const appearedBefore = this.appearsInArray(current, previous9);
-        const doubleViolet = this.detectDoubleViolet(this.results);
-
-        const frequency = {};
-        const categories = {};
-        let bigCount = 0;
-        let smallCount = 0;
-
-        this.results.forEach((num) => {
-            frequency[num] = (frequency[num] || 0) + 1;
-            const category = this.classifyNumber(num);
-            categories[num] = category;
-            if (category === 'Big') bigCount++;
-            else if (category === 'Small') smallCount++;
-        });
-
-        const patterns = this.detectPatterns(this.results);
-
-        this.analysis = {
-            current: {
-                value: current,
-                category: this.classifyNumber(current),
-                details: this.getCategoryDetails(current),
-                appearedBefore: appearedBefore,
-                timesAppeared: frequency[current] || 0
-            },
-            previous9,
-            doubleViolet,
-            frequency,
-            categories,
-            statistics: {
-                total: this.results.length,
-                big: bigCount,
-                small: smallCount,
-                bigPercentage: ((bigCount / this.results.length) * 100).toFixed(1),
-                smallPercentage: ((smallCount / this.results.length) * 100).toFixed(1)
-            },
-            patterns,
-            allResults: this.results
-        };
-    }
-
-    detectPatterns(sequence) {
-        const patterns = {
-            consecutive: [],
-            repeating: [],
-            alternating: false,
-            increasing: false,
-            decreasing: false
-        };
-
-        for (let i = 0; i < sequence.length - 1; i++) {
-            if (Math.abs(sequence[i] - sequence[i + 1]) === 1) {
-                patterns.consecutive.push({
-                    pair: [sequence[i], sequence[i + 1]],
-                    position: i
-                });
-            }
-        }
-
-        for (let i = 0; i < sequence.length - 2; i++) {
-            if (sequence[i] === sequence[i + 1] && sequence[i] === sequence[i + 2]) {
-                patterns.repeating.push({
-                    number: sequence[i],
-                    position: i,
-                    count: 3
-                });
-            }
-        }
-
-        let alternatingCount = 0;
-        for (let i = 0; i < sequence.length - 1; i++) {
-            const cat1 = this.classifyNumber(sequence[i]);
-            const cat2 = this.classifyNumber(sequence[i + 1]);
-            if (cat1 !== cat2) alternatingCount++;
-        }
-        patterns.alternating = alternatingCount >= sequence.length - 2;
-
-        let increasing = true;
-        let decreasing = true;
-        for (let i = 0; i < sequence.length - 1; i++) {
-            if (sequence[i] >= sequence[i + 1]) decreasing = false;
-            if (sequence[i] <= sequence[i + 1]) increasing = false;
-        }
-        patterns.increasing = increasing;
-        patterns.decreasing = decreasing;
-
-        return patterns;
-    }
-
-    predict() {
-        if (!this.analysis) {
-            console.error('❌ Please run analysis first');
-            return;
-        }
-
-        const current = this.analysis.current;
-        const appearedBefore = current.appearedBefore;
-        const doubleViolet = this.analysis.doubleViolet;
-        const stats = this.analysis.statistics;
-        const patterns = this.analysis.patterns;
-
-        const oppositeCategory = current.category === 'Big' ? 'Small' : 'Big';
-
-        let prediction = {
-            strategy: '',
-            confidence: 0,
-            recommendedNumbers: [],
-            reasoning: []
-        };
-
-        if (appearedBefore) {
-            prediction.strategy = 'Current appeared before - predicting opposite';
-            prediction.reasoning.push(`Number ${current.value} appeared ${current.timesAppeared} times in last 10 results`);
-            prediction.reasoning.push('Historical pattern suggests opposition');
-            prediction.confidence = 65;
-        } else {
-            prediction.strategy = 'New number - predicting opposite for diversification';
-            prediction.reasoning.push(`Number ${current.value} is new in recent history`);
-            prediction.confidence = 60;
-        }
-
-        if (doubleViolet.found) {
-            prediction.reasoning.push(`⚠️ DOUBLE VIOLET DETECTED! ${doubleViolet.count} occurrence(s)`);
-            doubleViolet.positions.forEach(pos => {
-                prediction.reasoning.push(`  Position ${pos.position + 1}: ${pos.number}${pos.number}`);
-            });
-            prediction.confidence += 10;
-        }
-
-        if (patterns.alternating) {
-            prediction.reasoning.push('🔄 Alternating pattern detected');
-            prediction.confidence += 5;
-        }
-
-        if (patterns.consecutive.length > 0) {
-            prediction.reasoning.push(`📈 ${patterns.consecutive.length} consecutive pairs found`);
-            prediction.confidence += 5;
-        }
-
-        const dominantCategory = stats.big > stats.small ? 'Big' : 'Small';
-        if (dominantCategory === oppositeCategory) {
-            prediction.reasoning.push(`📊 ${oppositeCategory} is currently dominant in history`);
-            prediction.confidence += 5;
-        }
-
-        const numberScores = {};
-        for (let i = 0; i <= 9; i++) {
-            const category = this.classifyNumber(i);
-            const frequency = this.analysis.frequency[i] || 0;
-            const isOpposite = category === oppositeCategory;
-            let score = isOpposite ? 10 : 0;
-            score += (10 - frequency * 2);
-            score += Math.random() * 2;
-            numberScores[i] = score;
-        }
-
-        const sortedNumbers = Object.entries(numberScores)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5)
-            .map(entry => parseInt(entry[0]));
-
-        prediction.recommendedNumbers = sortedNumbers;
-        prediction.confidence = Math.min(100, Math.round(prediction.confidence));
-
-        this.prediction = prediction;
-    }
+// ============================================================
+//  LUCIFER AI – ONLY SIZE PREDICTION STRATEGY
+// ============================================================
+function getNumInfo(item) {
+    const n = parseInt(item.number || item.winNumber || 0);
+    const size = n >= 5 ? "BIG" : "SMALL";
+    let color = "UNKNOWN";
+    if (n === 0) color = "RED";
+    else if (n === 5) color = "GREEN";
+    else if ([1, 3, 7, 9].includes(n)) color = "GREEN";
+    else if ([2, 4, 6, 8].includes(n)) color = "RED";
+    return { n, size, color };
 }
 
 function decidePrediction(list) {
-    if (!list || list.length < 10) return null;
+    if (!list || list.length < 20) return null;
 
-    const numbers = buildNumberList(list, 10);
-    if (numbers.length < 10) return null;
+    const currentItem = list[0];
+    const currentNum = parseInt(currentItem.number || currentItem.winNumber || 0);
 
-    const analyzer = new ResultAnalyzer();
-    if (!analyzer.setResults(numbers)) return null;
+    let matches = [];
 
-    const currentCategory = analyzer.analysis.current.category;
-    const predictionValue = currentCategory === 'Big' ? 'SMALL' : 'BIG';
-    const history = numbers.slice(0, 4).map(n => n >= 5 ? 'B' : 'S').join('');
+    // Scan history for previous occurrences of currentNum
+    // list[0] is most recent. Previous occurrences are at i >= 1.
+    // The result that followed occurrence at i is at i - 1.
+    for (let i = 1; i < list.length - 1; i++) {
+        const pastItem = list[i];
+        const pastNum = parseInt(pastItem.number || pastItem.winNumber || 0);
+        if (pastNum === currentNum) {
+            const nextItem = list[i - 1]; // Result that followed immediately after
+            const nextInfo = getNumInfo(nextItem);
+            matches.push({
+                period: nextItem.issueNumber,
+                ...nextInfo
+            });
+        }
+    }
 
-    return {
-        type: 'SIZE',
-        val: predictionValue,
-        mode: currentCategory,
-        history: history,
-        analysis: analyzer.analysis,
-        predictionDetails: analyzer.prediction
-    };
+    // Require at least 3 matches
+    if (matches.length < 3) return null;
+
+    // Take the 3 most recent matches
+    const top3 = matches.slice(0, 3);
+
+    const size1 = top3[0].size;
+    const size2 = top3[1].size;
+    const size3 = top3[2].size;
+
+    // Check if all 3 sizes are identical
+    if (size1 === size2 && size2 === size3) {
+        const c1 = top3[0].color;
+        const c2 = top3[1].color;
+        const c3 = top3[2].color;
+
+        // Colors must NOT be all the same
+        if (!(c1 === c2 && c2 === c3)) {
+            const predictedSize = size1 === "BIG" ? "SMALL" : "BIG";
+            return {
+                type: 'SIZE',
+                val: predictedSize,
+                history: `${size1[0]},${size2[0]},${size3[0]} (3 Matches)`
+            };
+        }
+    }
+
+    return null;
 }
 
 
