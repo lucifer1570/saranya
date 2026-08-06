@@ -905,10 +905,12 @@ function decidePrediction(list) {
         // Colors must NOT be all the same
         if (!(c1 === c2 && c2 === c3)) {
             const predictedSize = size1 === "BIG" ? "SMALL" : "BIG";
+            const reason = `Number ${currentNum} appeared previously. Last 3 subsequent sizes were [${size1}, ${size2}, ${size3}] (all match) with mixed colors (${c1}, ${c2}, ${c3}). Predicting opposite size: ${predictedSize}.`;
             return {
                 type: 'SIZE',
                 val: predictedSize,
-                history: `${size1[0]},${size2[0]},${size3[0]} (3 Matches)`
+                history: `${size1[0]},${size2[0]},${size3[0]} (3 Matches)`,
+                reason: reason
             };
         }
     }
@@ -1140,6 +1142,7 @@ async function runPredict(userId, chatId) {
         abLine = (st.level > 1 ? "📈 MART " : "💰 BET ") + "L" + st.level + ": ₹" + curBet;
     }
 
+    const reasonText = signal.reason || `Pattern matched ${signal.history || '3 previous occurrences'}. Size repetition detected.`;
     await send(chatId,
 "╔══════════════════════════╗\n"+
 "║   👑 EARN WITH ME AI    ║\n"+
@@ -1147,6 +1150,8 @@ async function runPredict(userId, chatId) {
 "║ Period  : "+next.slice(-6)+"\n"+
 "║ Signal  : "+(signal.val==="BIG"?"🔵 BIG":"🟠 SMALL")+"\n"+
 "║ Pattern : "+(signal.history || "N/A")+"\n"+
+"╠══════════════════════════╣\n"+
+"║ 💡 Reason: " + reasonText + "\n"+
 "╠══════════════════════════╣\n"+
 "║ "+abLine+"\n"+
 "╚══════════════════════════╝",
