@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     rootDir: bdg
-    buildCommand: npm install && node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
+    buildCommand: cd bdg && npm install && node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
     startCommand: npm start
     envVars:
       - key: PUPPETEER_CACHE_DIR
