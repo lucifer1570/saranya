@@ -1,3 +1,26 @@
+
+// ============================================================
+//  GAME RESULTS LOGGER
+// ============================================================
+function logGameResult(period, betType, number, color, outcome, profit, userId) {
+    if (!gameResults) gameResults = [];
+    gameResults.unshift({
+        time: new Date().toISOString(),
+        userId: userId || "SYSTEM",
+        period: period,
+        betType: betType,
+        number: number,
+        color: color,
+        outcome: outcome, // 'WIN' or 'LOSS'
+        profit: profit
+    });
+    // Keep last 500 results
+    if (gameResults.length > 500) {
+        gameResults = gameResults.slice(0, 500);
+    }
+    saveData();
+}
+
 const fs = require('fs');
 const path = require('path');
 const TelegramBot = require('node-telegram-bot-api');
@@ -62,6 +85,7 @@ function loadData() {
             if (data.adminPasswords) adminPasswords = data.adminPasswords;
             if (data.stats) stats = data.stats;
             if (data.userCreds) userCreds = data.userCreds;
+            if (data.gameResults) gameResults = data.gameResults;
             console.log("✅ Data loaded from bot_data.json");
         }
     } catch (e) {
@@ -80,7 +104,8 @@ function saveData() {
             keyStore,
             adminPasswords,
             stats,
-            userCreds
+            userCreds,
+            gameResults
         };
         fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
     } catch (e) {
@@ -114,6 +139,8 @@ let profitTrack    = {};
 let GLOBAL_TOKEN   = "";
 let userTokens = {}; 
 let userStates = {};
+let gameResults = [];
+
 
 
 // ============================================================
@@ -1012,6 +1039,7 @@ function getStatus(userId) {
 
 // 2. handleWin - UI & Stats
 async function handleWin(userId, chatId, actual, num, betLevel) {
+    logGameResult("UNKNOWN", "BET", num, actual, "WIN", profit, userId);
     const pt = profitTrack[userId];
     const cfg = autobetCfg[userId];
     const amt = cfg.customBets[betLevel-1] || (cfg.baseBet * MULT[betLevel-1]);
@@ -1040,6 +1068,7 @@ async function handleWin(userId, chatId, actual, num, betLevel) {
 
 // 3. handleLoss - UI & Stats
 async function handleLoss(userId, chatId, actual, num, betLevel) {
+    logGameResult("UNKNOWN", "BET", num, actual, "LOSS", -amt, userId);
     const st = autobetState[userId];
     const pt = profitTrack[userId];
     const cfg = autobetCfg[userId];
@@ -1509,6 +1538,20 @@ function addHandlers(){
             if(text==="🟢 Add User")     {ownerState={action:"adduser"};return send(OWNER_ID,"User ID:");}
             if(text==="🔴 Remove User")  {ownerState={action:"removeuser"};return send(OWNER_ID,"User ID?");}
             if(text==="🔐 Set Token")    {ownerState={action:"settoken"};return send(OWNER_ID,"Token paste:");}
+            
+            if(text==="📊 Game Results") {
+                if (!gameResults || gameResults.length === 0) return send(OWNER_ID, "No game results stored yet.");
+                let report = "🎮 RECENT GAME RESULTS (Last 15)
+\n";
+                gameResults.slice(0, 15).forEach((r, idx) => {
+                    report += `${idx+1}. Period: ${r.period}\n`;
+                    report += `   User: ${r.userId} | Bet: ${r.betType}\n`;
+                    report += `   Result: ${r.outcome} (₹${r.profit >= 0 ? '+' : ''}${r.profit})\n`;
+                    report += `   ------------------------\n`;
+                });
+                return send(OWNER_ID, report);
+            }
+
             if(text==="📊 All Status")    {
                 const ids = Object.keys(usersAccess);
                 if(ids.length === 0) return send(OWNER_ID, "No users found.");
