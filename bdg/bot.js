@@ -172,7 +172,7 @@ const puppeteer   = require('puppeteer');
 // ============================================================
 //  CONFIG
 // ============================================================
-const BOT_TOKEN    ="8999335291:AAG513_SpPYv5KVYCsImzHYEubYpJWzl8yc";
+const BOT_TOKEN    ="8999335291:AAFVp0AXAlI7gxQm0IwgNF-HfQmom17xYXo";
 const OWNER_ID     = 1865939951;
 const OWNER_PASS   = "praveensaran";
 const ADMIN_HANDLE = "@lucifer1570";
