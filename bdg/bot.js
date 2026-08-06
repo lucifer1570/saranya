@@ -322,6 +322,52 @@ async function autoLogin(userId, chatId, silent = false) {
         return false;
     }
 
+    // First try direct API login for maximum reliability without headless browser dependency
+    try {
+        const deviceId = getOrCreateDevice(userId);
+        const captchaId = await fetchCaptcha();
+        const loginPayload = {
+            isably: 0,
+            password: pass,
+            username: phone,
+            appId: 1,
+            loginType: 0,
+            remote_ip: "",
+            language: "en",
+            captchaId: captchaId,
+            otp: "",
+            deviceId: deviceId
+        };
+        loginPayload.signature = makeLoginSign(loginPayload);
+        loginPayload.timestamp = Math.floor(Date.now() / 1000);
+
+        const r = await axios.post(LOGIN_URL, loginPayload, {
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/plain, */*",
+                "Origin": "https://bdgwin8.vip",
+                "Referer": "https://bdgwin8.vip/",
+                "Ar-Origin": "https://bdgwin8.vip",
+                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36"
+            },
+            timeout: 10000
+        });
+
+        const d = r.data;
+        if (d && (d.code === 0 || d.msg === "Succeed") && d.data) {
+            const token = d.data.token || d.data;
+            if (typeof token === 'string' && token.length > 20) {
+                userTokens[userId] = token;
+                await logBoth(chatId, `✅ [SUCCESS] Direct API login successful for user ${userId}!`);
+                return true;
+            }
+        }
+        console.log("[DIRECT LOGIN] API response:", d);
+    } catch (apiErr) {
+        console.log("[DIRECT LOGIN ERROR]", apiErr.message);
+    }
+
+    // Fallback to Puppeteer if direct API login fails
     let browser;
     try {
         browser = await puppeteer.launch({
@@ -390,7 +436,7 @@ async function autoLogin(userId, chatId, silent = false) {
         if (capturedToken) {
             // Success: Update token only when captured
             userTokens[userId] = capturedToken;
-            await logBoth(chatId, `✅ [SUCCESS] Token captured successfully for user ${userId}!`);
+            await logBoth(chatId, `✅ [SUCCESS] Token captured successfully via Puppeteer for user ${userId}!`);
             return true;
         } else {
             throw new Error("Token not found in requests after login sequence.");
