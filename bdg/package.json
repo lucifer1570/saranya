@@ -4,7 +4,8 @@
   "type": "commonjs",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.js",
+    "postinstall": "node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.1",

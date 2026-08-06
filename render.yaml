@@ -5,10 +5,10 @@ services:
     region: oregon
     plan: free
     rootDir: bdg
-    buildCommand: npm install && PUPPETEER_CACHE_DIR=/opt/render/project/src/bdg/.cache npx puppeteer browsers install chrome
+    buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: PUPPETEER_CACHE_DIR
-        value: /opt/render/project/src/bdg/.cache
+        value: /opt/render/project/src/bdg/.cache/puppeteer
       - key: NODE_VERSION
         value: 24.14.1
