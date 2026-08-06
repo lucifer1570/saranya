@@ -539,14 +539,11 @@ async function fetchCaptcha() {
 
 
 async function autoLogin(userId, chatId, silent = false) {
-
-
     const creds = userCreds[userId] || {};
     const { phone, pass } = creds;
 
     if (!phone || !pass) {
         await logBoth(chatId, `[AUTO LOGIN] User ${userId} has no phone or password set.`);
-
         return false;
     }
 
@@ -562,89 +559,112 @@ async function autoLogin(userId, chatId, silent = false) {
                 '--disable-accelerated-2d-canvas',
                 '--no-first-run',
                 '--no-zygote',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--disable-blink-features=AutomationControlled'
             ]
         });
         const page = await browser.newPage();
+        
+        // Evasion flags
+        await page.evaluateOnNewDocument(() => {
+            Object.defineProperty(navigator, 'webdriver', { get: () => false });
+            window.navigator.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+        });
+
         await page.setDefaultNavigationTimeout(90000); 
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
         let capturedToken = null;
         await page.setRequestInterception(true);
         page.on('request', (req) => {
-            if (req.url().includes('GetBalance') && req.headers()['authorization']) {
-                capturedToken = req.headers()['authorization'].replace(/^Bearer\s+/i, "");
+            const auth = req.headers()['authorization'] || req.headers()['Authorization'];
+            if (auth) {
+                const t = auth.replace(/^Bearer\s+/i, "");
+                if (t.length > 20) capturedToken = t;
             }
             req.continue();
         });
 
-        await page.goto('https://bdgwin901.com/#/login', { waitUntil: 'domcontentloaded', timeout: 90000 });
-        await page.waitForSelector('input', { timeout: 30000 });
-        const inputs = await page.$$('input');
-        if (inputs.length < 2) throw new Error("Login inputs not found");
+        await page.goto('https://bdgwin901.com/#/login', { waitUntil: 'networkidle2', timeout: 90000 });
+        await new Promise(r => setTimeout(r, 4000));
 
-        await inputs[0].type(phone, { delay: 50 });
-        await inputs[1].type(pass, { delay: 50 });
-        
-        await page.evaluate(() => {
-            const btns = Array.from(document.querySelectorAll('button'));
-            const loginBtn = btns.find(b => b.innerText.includes('Log in') || b.innerText.includes('Login'));
-            if (loginBtn) loginBtn.click();
-            else document.querySelector('form')?.submit();
-        });
+        // Try direct input selectors or evaluate typing
+        const typed = await page.evaluate((p, pw) => {
+            const inputs = Array.from(document.querySelectorAll('input'));
+            if (inputs.length >= 2) {
+                inputs[0].value = p;
+                inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+                inputs[1].value = pw;
+                inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+                return true;
+            }
+            return false;
+        }, phone, pass);
 
-        try {
-            await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 45000 });
-        } catch (e) {
-            // Ignore timeout, we'll check token anyway
+        if (!typed) {
+            await page.waitForSelector('input', { timeout: 30000 });
+            const inputs = await page.$$('input');
+            if (inputs.length < 2) throw new Error("Login inputs not found");
+            await inputs[0].type(phone, { delay: 50 });
+            await inputs[1].type(pass, { delay: 50 });
         }
-        await new Promise(r => setTimeout(r, 5000));
 
-        await page.evaluate(() => {
-            const closeBtn = document.querySelector('.van-icon-cross') || document.querySelector('.close-icon');
-            if (closeBtn) closeBtn.click();
-        });
         await new Promise(r => setTimeout(r, 1000));
 
+        // Click login button
         await page.evaluate(() => {
-            const navItems = Array.from(document.querySelectorAll('div, span'));
-            const lotteryBtn = navItems.find(el => el.innerText.trim() === 'Lottery');
-            if (lotteryBtn) lotteryBtn.click();
-        });
-        await new Promise(r => setTimeout(r, 2000));
-
-        await page.evaluate(() => {
-            const navItems = Array.from(document.querySelectorAll('div, span'));
-            const winGoBtn = navItems.find(el => el.innerText.trim() === 'Win Go');
-            if (winGoBtn) winGoBtn.click();
+            const btns = Array.from(document.querySelectorAll('button, div, span'));
+            const loginBtn = btns.find(b => b.innerText && (b.innerText.includes('Log in') || b.innerText.includes('Login') || b.innerText.includes('登录')));
+            if (loginBtn) loginBtn.click();
+            else {
+                const f = document.querySelector('form');
+                if (f) f.submit();
+            }
         });
 
-        for (let i = 0; i < 50; i++) {
+        // Also check localStorage for token after login click
+        for (let i = 0; i < 30; i++) {
             if (capturedToken) break;
+            const tokenFromStorage = await page.evaluate(() => {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    const val = localStorage.getItem(key);
+                    if (val && val.length > 20 && (val.includes('eyJ') || key.toLowerCase().includes('token'))) {
+                        return val.replace(/^Bearer\s+/i, "").replace(/"/g, "");
+                    }
+                }
+                return null;
+            }).catch(() => null);
+
+            if (tokenFromStorage) {
+                capturedToken = tokenFromStorage;
+                break;
+            }
             await new Promise(r => setTimeout(r, 1000));
         }
 
+        if (!capturedToken) {
+            // Navigate to WinGo / Lottery page to trigger API requests
+            await page.goto('https://bdgwin901.com/#/winGo', { waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
+            for (let i = 0; i < 20; i++) {
+                if (capturedToken) break;
+                await new Promise(r => setTimeout(r, 1000));
+            }
+        }
+
         if (capturedToken) {
-            // Success: Update token only when captured
             userTokens[userId] = capturedToken;
             await logBoth(chatId, `✅ [SUCCESS] Token captured successfully for user ${userId}!`);
             return true;
         } else {
-            throw new Error("Token not found in requests after login sequence.");
+            throw new Error("Token not found in requests or localStorage after login sequence.");
         }
-
-    } catch (err) {
-        await logBoth(chatId, `❌ Login Error for user ${userId}: ${err.message}`, true);
-        return false;
-    } finally {
-        if (browser) await browser.close();
 
     }
 }
 
-// ============================================================
-//  ROBUST LOGIN WITH CONTINUOUS RETRY
-// ============================================================
 async function robustLogin(userId, chatId, silent = false) {
     let success = await autoLogin(userId, chatId, silent);
     if (!success && !silent && chatId) {
