@@ -2,25 +2,51 @@
 // ============================================================
 //  GAME RESULTS LOGGER
 // ============================================================
+
+// ============================================================
+//  GAME RESULTS LOGGER (Detailed 500 records)
+// ============================================================
+function getNumberColor(num) {
+    const n = parseInt(num);
+    if (isNaN(n)) return "Unknown";
+    if (n === 0) return "Red/Violet";
+    if (n === 5) return "Green/Violet";
+    if ([1, 3, 7, 9].includes(n)) return "Green";
+    if ([2, 4, 6, 8].includes(n)) return "Red";
+    return "Unknown";
+}
+
+function getNumberSize(num) {
+    const n = parseInt(num);
+    if (isNaN(n)) return "Unknown";
+    return n >= 5 ? "Big" : "Small";
+}
+
 function logGameResult(period, betType, number, color, outcome, profit, userId) {
     if (!gameResults) gameResults = [];
+    
+    const numStr = String(number !== undefined ? number : "-");
+    const size = getNumberSize(numStr);
+    const resolvedColor = (color && color !== "-") ? color : getNumberColor(numStr);
+
     gameResults.unshift({
         time: new Date().toISOString(),
         userId: userId || "SYSTEM",
-        period: period,
-        betType: betType,
-        number: number,
-        color: color,
+        period: period || "UNKNOWN",
+        betType: betType || "BET",
+        number: numStr,
+        size: size,
+        color: resolvedColor,
         outcome: outcome, // 'WIN' or 'LOSS'
         profit: profit
     });
-    // Keep last 500 results
+
+    // Keep exactly latest 500 results
     if (gameResults.length > 500) {
         gameResults = gameResults.slice(0, 500);
     }
     saveData();
 }
-
 const fs = require('fs');
 const path = require('path');
 const TelegramBot = require('node-telegram-bot-api');
@@ -1541,14 +1567,21 @@ function addHandlers(){
             
             if(text==="📊 Game Results") {
                 if (!gameResults || gameResults.length === 0) return send(OWNER_ID, "No game results stored yet.");
-                let report = "🎮 RECENT GAME RESULTS (Last 15)
-\n";
+                let report = "🎮 LATEST GAME RESULTS (Showing last 15 of " + gameResults.length + ")
+
+";
                 gameResults.slice(0, 15).forEach((r, idx) => {
-                    report += `${idx+1}. Period: ${r.period}\n`;
-                    report += `   User: ${r.userId} | Bet: ${r.betType}\n`;
-                    report += `   Result: ${r.outcome} (₹${r.profit >= 0 ? '+' : ''}${r.profit})\n`;
-                    report += `   ------------------------\n`;
+                    report += `${idx+1}. Period: ${r.period}
+`;
+                    report += `   Num: ${r.number} | Size: ${r.size} | Color: ${r.color}
+`;
+                    report += `   Outcome: ${r.outcome} (₹${r.profit >= 0 ? '+' : ''}${r.profit})
+`;
+                    report += `   ------------------------
+`;
                 });
+                return send(OWNER_ID, report);
+            });
                 return send(OWNER_ID, report);
             }
 
