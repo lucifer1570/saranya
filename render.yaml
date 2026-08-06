@@ -12,3 +12,4 @@ services:
         value: /opt/render/project/src/bdg/.cache
       - key: NODE_VERSION
         value: 24.14.1
+
