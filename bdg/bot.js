@@ -565,7 +565,6 @@ async function autoLogin(userId, chatId, silent = false) {
         });
         const page = await browser.newPage();
         
-        // Evasion flags
         await page.evaluateOnNewDocument(() => {
             Object.defineProperty(navigator, 'webdriver', { get: () => false });
             window.navigator.chrome = { runtime: {} };
@@ -590,7 +589,6 @@ async function autoLogin(userId, chatId, silent = false) {
         await page.goto('https://bdgwin901.com/#/login', { waitUntil: 'networkidle2', timeout: 90000 });
         await new Promise(r => setTimeout(r, 4000));
 
-        // Try direct input selectors or evaluate typing
         const typed = await page.evaluate((p, pw) => {
             const inputs = Array.from(document.querySelectorAll('input'));
             if (inputs.length >= 2) {
@@ -613,7 +611,6 @@ async function autoLogin(userId, chatId, silent = false) {
 
         await new Promise(r => setTimeout(r, 1000));
 
-        // Click login button
         await page.evaluate(() => {
             const btns = Array.from(document.querySelectorAll('button, div, span'));
             const loginBtn = btns.find(b => b.innerText && (b.innerText.includes('Log in') || b.innerText.includes('Login') || b.innerText.includes('登录')));
@@ -624,7 +621,6 @@ async function autoLogin(userId, chatId, silent = false) {
             }
         });
 
-        // Also check localStorage for token after login click
         for (let i = 0; i < 30; i++) {
             if (capturedToken) break;
             const tokenFromStorage = await page.evaluate(() => {
@@ -646,7 +642,6 @@ async function autoLogin(userId, chatId, silent = false) {
         }
 
         if (!capturedToken) {
-            // Navigate to WinGo / Lottery page to trigger API requests
             await page.goto('https://bdgwin901.com/#/winGo', { waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
             for (let i = 0; i < 20; i++) {
                 if (capturedToken) break;
@@ -662,6 +657,11 @@ async function autoLogin(userId, chatId, silent = false) {
             throw new Error("Token not found in requests or localStorage after login sequence.");
         }
 
+    } catch (err) {
+        await logBoth(chatId, `❌ Login Error for user ${userId}: ${err.message}`, true);
+        return false;
+    } finally {
+        if (browser) await browser.close();
     }
 }
 
