@@ -547,121 +547,46 @@ async function autoLogin(userId, chatId, silent = false) {
         return false;
     }
 
-    let browser;
     try {
-        browser = await puppeteer.launch({
-            headless: true,
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--disable-gpu',
-                '--disable-blink-features=AutomationControlled'
-            ]
-        });
-        const page = await browser.newPage();
+        await logBoth(chatId, `🔄 Logging in via API for ${phone}...`, true);
+        const captchaId = await fetchCaptcha();
         
-        await page.evaluateOnNewDocument(() => {
-            Object.defineProperty(navigator, 'webdriver', { get: () => false });
-            window.navigator.chrome = { runtime: {} };
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+        const payload = {
+            username: phone,
+            password: pass,
+            captchaId: captchaId,
+            code: "",
+            device: getDevice(userId)
+        };
+        payload.signature = makeLoginSign(payload);
+
+        const res = await axios.post(LOGIN_URL, payload, {
+            headers: {
+                "Accept": "application/json, text/plain, */*",
+                "Content-Type": "application/json",
+                "Origin": "https://bdgwin8.vip",
+                "Referer": "https://bdgwin8.vip",
+                "Ar-Origin": "https://bdgwin901.com",
+                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36"
+            },
+            timeout: 15000
         });
 
-        await page.setDefaultNavigationTimeout(90000); 
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-        let capturedToken = null;
-        await page.setRequestInterception(true);
-        page.on('request', (req) => {
-            const auth = req.headers()['authorization'] || req.headers()['Authorization'];
-            if (auth) {
-                const t = auth.replace(/^Bearer\s+/i, "");
-                if (t.length > 20) capturedToken = t;
-            }
-            req.continue();
-        });
-
-        await page.goto('https://bdgwin901.com/#/login', { waitUntil: 'networkidle2', timeout: 90000 });
-        await new Promise(r => setTimeout(r, 4000));
-
-        const typed = await page.evaluate((p, pw) => {
-            const inputs = Array.from(document.querySelectorAll('input'));
-            if (inputs.length >= 2) {
-                inputs[0].value = p;
-                inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-                inputs[1].value = pw;
-                inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+        if (res.data && (res.data.code === 0 || res.data.success)) {
+            const token = res.data.data?.token || res.data.token || res.data.data;
+            if (typeof token === 'string' && token.length > 20) {
+                userTokens[userId] = token;
+                saveDataToSupabase();
+                await logBoth(chatId, `✅ [SUCCESS] API Login successful for user ${userId}!`);
                 return true;
             }
-            return false;
-        }, phone, pass);
-
-        if (!typed) {
-            await page.waitForSelector('input', { timeout: 30000 });
-            const inputs = await page.$$('input');
-            if (inputs.length < 2) throw new Error("Login inputs not found");
-            await inputs[0].type(phone, { delay: 50 });
-            await inputs[1].type(pass, { delay: 50 });
         }
-
-        await new Promise(r => setTimeout(r, 1000));
-
-        await page.evaluate(() => {
-            const btns = Array.from(document.querySelectorAll('button, div, span'));
-            const loginBtn = btns.find(b => b.innerText && (b.innerText.includes('Log in') || b.innerText.includes('Login') || b.innerText.includes('登录')));
-            if (loginBtn) loginBtn.click();
-            else {
-                const f = document.querySelector('form');
-                if (f) f.submit();
-            }
-        });
-
-        for (let i = 0; i < 30; i++) {
-            if (capturedToken) break;
-            const tokenFromStorage = await page.evaluate(() => {
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    const val = localStorage.getItem(key);
-                    if (val && val.length > 20 && (val.includes('eyJ') || key.toLowerCase().includes('token'))) {
-                        return val.replace(/^Bearer\s+/i, "").replace(/"/g, "");
-                    }
-                }
-                return null;
-            }).catch(() => null);
-
-            if (tokenFromStorage) {
-                capturedToken = tokenFromStorage;
-                break;
-            }
-            await new Promise(r => setTimeout(r, 1000));
-        }
-
-        if (!capturedToken) {
-            await page.goto('https://bdgwin901.com/#/winGo', { waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
-            for (let i = 0; i < 20; i++) {
-                if (capturedToken) break;
-                await new Promise(r => setTimeout(r, 1000));
-            }
-        }
-
-        if (capturedToken) {
-            userTokens[userId] = capturedToken;
-            await logBoth(chatId, `✅ [SUCCESS] Token captured successfully for user ${userId}!`);
-            return true;
-        } else {
-            throw new Error("Token not found in requests or localStorage after login sequence.");
-        }
+        
+        throw new Error(res.data?.msg || res.data?.message || "Invalid API login response");
 
     } catch (err) {
         await logBoth(chatId, `❌ Login Error for user ${userId}: ${err.message}`, true);
         return false;
-    } finally {
-        if (browser) await browser.close();
     }
 }
 
