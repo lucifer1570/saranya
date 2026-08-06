@@ -586,38 +586,39 @@ async function autoLogin(userId, chatId, silent = false) {
             req.continue();
         });
 
-        await page.goto('https://bdgwin901.com/#/login', { waitUntil: 'networkidle2', timeout: 90000 });
+        await page.goto('https://bdgwin901.com/#/login', { waitUntil: 'domcontentloaded', timeout: 90000 });
         await new Promise(r => setTimeout(r, 4000));
 
-        const typed = await page.evaluate((p, pw) => {
+        // Robust input filling using evaluate & direct selectors
+        await page.evaluate((p, pw) => {
             const inputs = Array.from(document.querySelectorAll('input'));
             if (inputs.length >= 2) {
+                inputs[0].focus();
                 inputs[0].value = p;
                 inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+                inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+                
+                inputs[1].focus();
                 inputs[1].value = pw;
                 inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
-                return true;
+                inputs[1].dispatchEvent(new Event('change', { bubbles: true }));
             }
-            return false;
         }, phone, pass);
 
-        if (!typed) {
-            await page.waitForSelector('input', { timeout: 30000 });
-            const inputs = await page.$$('input');
-            if (inputs.length < 2) throw new Error("Login inputs not found");
-            await inputs[0].type(phone, { delay: 50 });
-            await inputs[1].type(pass, { delay: 50 });
-        }
+        await new Promise(r => setTimeout(r, 1500));
 
-        await new Promise(r => setTimeout(r, 1000));
-
+        // Click login button with multiple fallbacks
         await page.evaluate(() => {
-            const btns = Array.from(document.querySelectorAll('button, div, span'));
-            const loginBtn = btns.find(b => b.innerText && (b.innerText.includes('Log in') || b.innerText.includes('Login') || b.innerText.includes('登录')));
-            if (loginBtn) loginBtn.click();
-            else {
-                const f = document.querySelector('form');
-                if (f) f.submit();
+            const elements = Array.from(document.querySelectorAll('button, div, span, a'));
+            const btn = elements.find(el => {
+                const txt = el.innerText ? el.innerText.trim().toLowerCase() : '';
+                return txt.includes('log in') || txt.includes('login') || txt.includes('signin') || txt.includes('登录');
+            });
+            if (btn) {
+                btn.click();
+            } else {
+                const buttons = document.querySelectorAll('button');
+                if (buttons.length > 0) buttons[buttons.length - 1].click();
             }
         });
 
