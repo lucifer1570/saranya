@@ -22,6 +22,7 @@ function getNumberSize(num) {
     return n >= 5 ? "Big" : "Small";
 }
 
+
 function logGameResult(period, betType, number, color, outcome, profit, userId) {
     if (!gameResults) gameResults = [];
     
@@ -29,23 +30,43 @@ function logGameResult(period, betType, number, color, outcome, profit, userId) 
     const size = getNumberSize(numStr);
     const resolvedColor = (color && color !== "-") ? color : getNumberColor(numStr);
 
-    gameResults.unshift({
+    const record = {
         time: new Date().toISOString(),
-        userId: userId || "SYSTEM",
+        userId: userId ? String(userId) : "SYSTEM",
         period: period || "UNKNOWN",
         betType: betType || "BET",
         number: numStr,
         size: size,
         color: resolvedColor,
         outcome: outcome, // 'WIN' or 'LOSS'
-        profit: profit
-    });
+        profit: Number(profit) || 0
+    };
 
-    // Keep exactly latest 500 results
+    gameResults.unshift(record);
+
+    // Keep exactly latest 500 results in memory
     if (gameResults.length > 500) {
         gameResults = gameResults.slice(0, 500);
     }
-    saveData();
+
+    // Save asynchronously to Supabase
+    if (supabase) {
+        supabase.from('game_results').insert({
+            user_id: record.userId,
+            period: record.period,
+            bet_type: record.betType,
+            number: record.number,
+            size: record.size,
+            color: record.color,
+            outcome: record.outcome,
+            profit: record.profit
+        }).then(({ error }) => {
+            if (error) console.error("❌ Error inserting game result into Supabase:", error.message);
+        });
+    }
+
+    // Also save KV store state
+    saveDataToSupabase();
 }
 const fs = require('fs');
 const path = require('path');
