@@ -161,7 +161,7 @@ function saveData() {
 }
 
 // Load data at startup
-loadData();
+
 // Auto save every 30 seconds
 setInterval(saveData, 30 * 1000);
 
