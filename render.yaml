@@ -4,11 +4,9 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: cd bdg && PUPPETEER_CACHE_DIR=/opt/render/project/src/bdg/.cache npm install
+    buildCommand: cd bdg && npm install
     startCommand: cd bdg && npm start
     envVars:
-      - key: PUPPETEER_CACHE_DIR
-        value: /opt/render/project/src/bdg/.cache
       - key: NODE_VERSION
         value: 24.14.1
       - key: SUPABASE_URL
