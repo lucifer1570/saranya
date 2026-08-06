@@ -3,8 +3,8 @@ process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || require('pa
 
 
 const { createClient } = require('@supabase/supabase-js');
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://qyzyqqxixluveqgwvfgx.supabase.co";
+const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "sb_publishable_AmzY5reQUtAX7TLX84OL7g_oc6lvQ3N";
 let supabase = null;
 if (SUPABASE_URL && SUPABASE_KEY) {
     try {
