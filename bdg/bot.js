@@ -310,28 +310,42 @@ async function fetchCaptcha() {
 // ============================================================
 
 
+let loginLock = {};
+let userTokens = {}; // Assuming userTokens is managed externally
+
 async function autoLogin(userId, chatId, silent = false) {
+    if (loginLock[userId]) return false;
+    loginLock[userId] = true;
 
-
-    const creds = userCreds[userId] || {};
-    const { phone, pass } = creds;
+    const creds = userCreds[userId] || {}; // Assuming userCreds is managed externally
+    const phone = creds.phone;
+    const pass = creds.pass;
 
     if (!phone || !pass) {
-        await logBoth(chatId, `[AUTO LOGIN] User ${userId} has no phone or password set.`);
-
+        loginLock[userId] = false;
+        if (!silent && chatId) await send(chatId,
+            "❌ Phone/Password இல்லை!\n\n" +
+            "Format:\n/setcreds FULLPHONE PASSWORD\n\n" +
+            "Example (India +91):\n/setcreds 916381605525 mypassword"
+        );
         return false;
     }
 
+    if (!silent && chatId) await send(chatId, "⏳ Logging in & fetching Bet Token... please wait...");
+    console.log("[LOGIN] Phone:", phone, "via Puppeteer (Bet Token Strategy)");
+
+    const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
     let browser;
+    let betToken = null;
+
     try {
         browser = await puppeteer.launch({
-            headless: true, 
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--single-process', '--disable-gpu']
+            headless: false, // Set to true for server environment
+            executablePath: chromePath,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
         });
-        const page = await browser.newPage();
-        await page.setDefaultNavigationTimeout(90000); 
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
+        const page = await browser.newPage();
         let capturedToken = null;
         await page.setRequestInterception(true);
         page.on('request', (req) => {
