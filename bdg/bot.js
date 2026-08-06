@@ -96,7 +96,7 @@ function getNumberColor(num) {
 function getNumberSize(num) {
     const n = parseInt(num);
     if (isNaN(n)) return "Unknown";
-    return n >= 5 ? "Big" : "Small";
+    return n >= 5 ? "BIG" : "SMALL";
 }
 
 
@@ -1108,6 +1108,7 @@ async function runPredict(userId, chatId) {
     if(sentPeriods[userId].has(next)) return setTimeout(()=>runPredict(userId,chatId), 2000);
     sentPeriods[userId].add(next);
 
+    await pollAndStoreApiResults();
     const signal = decidePrediction(list);
     if(!signal) return setTimeout(()=>runPredict(userId,chatId), 5000);
 
