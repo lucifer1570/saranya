@@ -1713,3 +1713,15 @@ if(text==="🔢 Set Watch Losses"){
     });
 }
 startBot();
+
+
+// Robust Telegram polling error suppression
+if (bot && typeof bot.on === 'function') {
+    bot.on('polling_error', (error) => {
+        if (error.code === 'ETELEGRAM' && error.message && error.message.includes('409 Conflict')) {
+            // Silently ignore 409 conflict to prevent log spam
+            return;
+        }
+        console.error("[TELEGRAM ERROR]", error.message || error);
+    });
+}
