@@ -4,7 +4,7 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: cd bdg && PUPPETEER_CACHE_DIR=/opt/render/project/src/bdg/.cache npm install
+    buildCommand: cd bdg && npm install && PUPPETEER_CACHE_DIR=/opt/render/project/src/bdg/.cache node node_modules/@puppeteer/browsers/lib/main-cli.js install chrome
     startCommand: cd bdg && npm start
     envVars:
       - key: PUPPETEER_CACHE_DIR
