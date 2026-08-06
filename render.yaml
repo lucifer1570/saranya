@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: autobetbot
+    env: node
+    region: oregon
+    plan: free
+    rootDir: bdg
+    buildCommand: npm install && PUPPETEER_CACHE_DIR=/opt/render/project/src/bdg/.cache npx puppeteer browsers install chrome
+    startCommand: npm start
+    envVars:
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/project/src/bdg/.cache
+      - key: NODE_VERSION
+        value: 24.14.1
