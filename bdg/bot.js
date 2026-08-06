@@ -905,7 +905,7 @@ function decidePrediction(list) {
         // Colors must NOT be all the same
         if (!(c1 === c2 && c2 === c3)) {
             const predictedSize = size1 === "BIG" ? "SMALL" : "BIG";
-            const reason = `Number ${currentNum} appeared previously. Last 3 subsequent sizes were [${size1}, ${size2}, ${size3}] (all match) with mixed colors (${c1}, ${c2}, ${c3}). Predicting opposite size: ${predictedSize}.`;
+            const reason = `Number ${currentNum} appeared 3+ times. Last 3 subsequent sizes were [${size1}, ${size2}, ${size3}] (all ${size1}) with mixed colors (${c1}, ${c2}, ${c3}). Rule: All sizes match & colors differ -> Predict Opposite Size (${predictedSize}).`;
             return {
                 type: 'SIZE',
                 val: predictedSize,
